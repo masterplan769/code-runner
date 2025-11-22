@@ -10,7 +10,8 @@ Run code instantly, organize scripts in tabs, and enjoy a clean, modern interfac
 
 ## 🚀 Features
 
-- **Multi-language support:** Python, Lua, JavaScript  
+- **Multi-language support:** Python, Lua, JavaScript
+- **Python 3.12 Only:** Python runs via Pyodide (⚠️ only Python 3.12 is supported)
 - **Drag & Drop files:** Easily run `.py`, `.lua`, or `.js` files  
 - **Multiple Tabs:** Work on several scripts simultaneously  
 - **Dark/Light Themes:** Switch between themes for comfortable coding  
