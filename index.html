@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Runner</title>
+<style>
+:root {
+    --bg-color: #0e0e0e;
+    --text-color: #f1f1f1;
+    --primary-color: #61dafb;
+    --input-bg: #1e1e1e;
+    --btn-bg: #333;
+    --btn-hover: #444;
+    --output-bg: #151515;
+    --error-color: #ff4c4c;
+}
+html, body {
+    height: 100%;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: var(--bg-color);
+    color: var(--text-color);
+    font-family: "Consolas", monospace;
+    transition: all 0.3s ease;
+}
+#wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 100px;
+}
+.panel {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    position: relative;
+    padding-top: 50px;
+}
+.panel .loading-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 30px;
+    margin-bottom: 5px;
+    margin-top: -30px;
+}
+.loading-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    min-height: 20px;
+}
+h1 {
+    text-align:center;
+    font-size:3em;
+    margin:20px 0 10px;
+    color:var(--primary-color);
+}
+#themeToggle {
+    position:fixed;
+    top:10px;
+    right:10px;
+    z-index:1000;
+    padding:10px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+    background:var(--btn-bg);
+    color:var(--text-color);
+}
+#tabs {
+    display:flex;
+    justify-content:center;
+    padding:10px;
+    background:var(--input-bg);
+    border-bottom:1px solid #333;
+}
+.tab {
+    padding:6px 12px;
+    margin-right:5px;
+    border-radius:6px 6px 0 0;
+    cursor:pointer;
+    background:var(--btn-bg);
+    position:relative;
+}
+.tab.active {
+    background:var(--primary-color);
+    color:black;
+}
+.tab .closeBtn {
+    position:absolute;
+    top:2px;
+    right:4px;
+    cursor:pointer;
+    font-weight:bold;
+}
+#addTab {
+    padding:6px 12px;
+    cursor:pointer;
+    background:var(--btn-bg);
+    border-radius:6px;
+    position:relative;
+}
+#tabOptions {
+    display:none;
+    position:absolute;
+    top:30px;
+    left:0;
+    background:var(--btn-bg);
+    border-radius:6px;
+    overflow:hidden;
+    z-index:1000;
+}
+#tabOptions div{
+    padding:8px 12px;
+    cursor:pointer;
+    background:var(--btn-bg);
+    border:none;
+    color:var(--text-color);
+}
+#tabOptions div:hover {
+    background:var(--btn-hover);
+}
+.panel {
+    display:none;
+    flex-direction:column;
+    align-items:flex-start;
+    padding:15px;
+    position:relative;
+}
+.panel.active {
+    display:flex;
+}
+textarea {
+    background:var(--input-bg);
+    color:var(--text-color);
+    border:1px solid #333;
+    border-radius:8px;
+    padding:10px;
+    font-size:16px;
+    resize:none;
+    overflow:auto;
+    width:600px;
+    height:200px;
+}
+select, button {
+    margin:10px;
+    padding:10px;
+    background:var(--btn-bg);
+    color:var(--text-color);
+    border:none;
+    border-radius:6px;
+    font-size:15px;
+    cursor:pointer;
+}
+select:hover, button:hover {
+    background:var(--btn-hover);
+}
+.output {
+    width:96%;
+    max-width:1000px;
+    min-width:200px;
+    height:200px;
+    min-height:50px;
+    background:var(--output-bg);
+    border-radius:8px;
+    border:1px solid #333;
+    padding:12px;
+    margin-top:10px;
+    white-space:pre-wrap;
+    font-size:15px;
+    resize:none;
+    overflow:auto;
+}
+.output .error {
+    color:var(--error-color);
+}
+.spinner {
+    display:inline-block;
+    width:14px;
+    height:14px;
+    border:2px solid var(--text-color);
+    border-top:2px solid var(--primary-color);
+    border-radius:50%;
+    animation:spin 1s linear infinite;
+    margin-left:5px;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+input[type=file]{ display:none; }
+</style>
+</head>
+<body>
+<div id="wrapper">
+<button id="themeToggle">🌙 / ☀️</button>
+<h1>Code Runner</h1>
+<div id="tabs">
+<div id="addTab">＋
+    <div id="tabOptions">
+        <div id="newFile">New File</div>
+        <div id="openFile">Open File</div>
+        <div id="openFolder">Open Folder</div>
+    </div>
+</div>
+</div>
+<div id="panels"></div>
+<input type="file" id="fileInput">
+<input type="file" id="folderInput" webkitdirectory directory multiple>
+</div>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js"></script>
+<script src="https://unpkg.com/fengari-web/dist/fengari-web.js"></script>
+<script>
+
+
+async function runJS(code) {
+    try {
+        let output = "";
+
+       
+        const print = (...args) => {
+            output += args.join(" ") + "\n";
+        };
+        window.print = print;
+
+    
+        const originalLog = console.log;
+        console.log = (...args) => {
+            output += args.join(" ") + "\n";
+            originalLog(...args);
+        };
+
+        let result = eval(code);
+
+     
+        if (output.trim() === "") {
+            if (result !== undefined) output = String(result);
+            else output = "No output";
+        }
+
+      
+        console.log = originalLog;
+
+        return output.trim();
+
+    } catch (err) {
+        return "JS Error: " + err;
+    }
+}
+
+
+
+async function runPy(code) {
+    try {
+        if (!pyodideReady) return "Python not loaded yet";
+
+        let output = "";
+        let tempPrint = pyodide.globals.get("print");
+
+       
+        pyodide.globals.set("print", (...args) => {
+            output += args.toString() + "\n";
+        });
+
+        let result = await pyodide.runPythonAsync(code);
+
+       
+        if (output.trim() === "") {
+            if (result !== undefined) output = String(result);
+            else output = "No output";
+        }
+
+       
+        pyodide.globals.set("print", tempPrint);
+
+        return output.trim();
+
+    } catch (err) {
+        return "Python Error: " + err;
+    }
+}
+
+
+
+
+
+function runLua(code) {
+    try {
+        if (!luaReady) return "Lua not loaded yet";
+
+        const { lua, lauxlib, to_luastring, to_jsstring } = fengObjs;
+
+        let output = "";
+
+    
+        lua.lua_pushjsfunction(L, function () {
+            let s = "";
+            let nArgs = lua.lua_gettop(L); 
+
+            for (let i = 1; i <= nArgs; i++) {
+                let type = lua.lua_type(L, i);
+
+                if (type === lua.LUA_TSTRING) {
+                    s += to_jsstring(lua.lua_tolstring(L, i));
+                }
+                else if (type === lua.LUA_TNUMBER) {
+                    s += lua.lua_tonumber(L, i).toString();
+                }
+                else if (type === lua.LUA_TBOOLEAN) {
+                    s += lua.lua_toboolean(L, i) ? "true" : "false";
+                }
+                else {
+                    s += "[Lua " + lua.lua_typename(L, type) + "]";
+                }
+
+                if (i < nArgs) s += " ";
+            }
+
+            output += s + "\n";
+            return 0;
+        });
+
+        lua.lua_setglobal(L, "print");
+
+
+        let loadStatus = lauxlib.luaL_loadstring(L, to_luastring(code));
+        if (loadStatus !== 0) {
+            let msg = to_jsstring(lua.lua_tolstring(L, -1));
+            return "Lua Compile Error: " + msg;
+        }
+
+        let runStatus = lua.lua_pcall(L, 0, 0, 0);
+        if (runStatus !== 0) {
+            let msg = to_jsstring(lua.lua_tolstring(L, -1));
+            return "Lua Error: " + msg;
+        }
+
+        return output.trim() || "No output";
+
+    } catch (err) {
+        return "Lua Error: " + err;
+    }
+}
+
+
+let darkMode = localStorage.getItem('codeRunnerTheme')==='dark';
+let tabCount = 0;
+let pyodideReady = false, luaReady = false, L, fengObjs;
+
+const tabsContainer = document.getElementById('tabs');
+const panelsContainer = document.getElementById('panels');
+const addTabBtn = document.getElementById('addTab');
+const tabOptions = document.getElementById('tabOptions');
+const themeBtn = document.getElementById('themeToggle');
+
+function applyTheme(dark){
+    if(dark){
+        document.documentElement.style.setProperty('--bg-color','#0e0e0e');
+        document.documentElement.style.setProperty('--text-color','#f1f1f1');
+        document.documentElement.style.setProperty('--primary-color','#61dafb');
+        document.documentElement.style.setProperty('--input-bg','#1e1e1e');
+        document.documentElement.style.setProperty('--btn-bg','#333');
+        document.documentElement.style.setProperty('--btn-hover','#444');
+        document.documentElement.style.setProperty('--output-bg','#151515');
+        themeBtn.textContent="☀️";
+    } else {
+        document.documentElement.style.setProperty('--bg-color','#ffffff');
+        document.documentElement.style.setProperty('--text-color','#0e0e0e');
+        document.documentElement.style.setProperty('--primary-color','#007acc');
+        document.documentElement.style.setProperty('--input-bg','#f5f5f5');
+        document.documentElement.style.setProperty('--btn-bg','#ddd');
+        document.documentElement.style.setProperty('--btn-hover','#ccc');
+        document.documentElement.style.setProperty('--output-bg','#eee');
+        themeBtn.textContent="🌙";
+    }
+    localStorage.setItem('codeRunnerTheme', dark?'dark':'light');
+}
+
+applyTheme(darkMode);
+
+themeBtn.addEventListener('click', ()=>{
+    darkMode=!darkMode;
+    applyTheme(darkMode);
+    saveState();
+});
+
+function switchTab(id){
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    document.querySelector(`.tab[data-id='${id}']`)?.classList.add('active');
+    document.querySelector(`.panel[data-id='${id}']`)?.classList.add('active');
+    localStorage.setItem('codeRunnerActiveTab', id);
+}
+
+
+function createNewTab(content="", tabName="Untitled") {
+    tabCount++;
+    const newTab = document.createElement('div');
+    newTab.classList.add('tab');
+    newTab.dataset.id = tabCount;
+    newTab.innerHTML = `${tabName} <span class='closeBtn'>×</span>`;
+    tabsContainer.insertBefore(newTab, addTabBtn);
+
+    const newPanel = document.createElement('div');
+    newPanel.classList.add('panel');
+    newPanel.dataset.id = tabCount;
+    newPanel.innerHTML = `
+<select class="language">
+<option value="all">All Languages</option>
+<option value="javascript">JavaScript</option>
+<option value="python">Python</option>
+<option value="lua">Lua</option>
+</select>
+<textarea placeholder="Type your code here..."></textarea>
+<div>
+<button class="run">▶ Run</button>
+<button class="save">💾 Save</button>
+<button class="clearAll">🗑 Clear All Saved Data</button>
+</div>
+<div class="output">
+<div class="loading-row">
+<span class="lua-text">✅ Lua loading</span>
+<span class='spinner lua-spinner'></span>
+</div>
+<div class="loading-row">
+<span class="py-text">⏳ Python loading</span>
+<span class='spinner py-spinner'></span>
+</div>
+</div>`;
+    panelsContainer.appendChild(newPanel);
+    newPanel.querySelector('textarea').value = content;
+    newPanel.querySelector('.clearAll').addEventListener('click', clearAllData);
+    requestAnimationFrame(() => updatePanelStatus(newPanel));
+    switchTab(tabCount);
+    saveState();
+}
+
+function saveState() {
+    const tabs = [];
+    document.querySelectorAll('.tab').forEach(tab => {
+        const panel = document.querySelector(`.panel[data-id='${tab.dataset.id}']`);
+        if(panel) {
+            tabs.push({ name: tab.textContent.replace('×','').trim(), code: panel.querySelector('textarea').value });
+        }
+    });
+    localStorage.setItem('codeRunnerTabs', JSON.stringify(tabs));
+    const activeTab = document.querySelector('.tab.active')?.dataset.id;
+    if(activeTab) localStorage.setItem('codeRunnerActiveTab', activeTab);
+    localStorage.setItem('codeRunnerTheme', darkMode ? 'dark' : 'light');
+}
+
+function loadState() {
+    const tabs = JSON.parse(localStorage.getItem('codeRunnerTabs') || '[]');
+    if(tabs.length){
+        document.querySelectorAll('.tab').forEach(t => t.remove());
+        document.querySelectorAll('.panel').forEach(p => p.remove());
+        tabs.forEach(t => createNewTab(t.code, t.name));
+        const activeTab = localStorage.getItem('codeRunnerActiveTab');
+        if(activeTab) switchTab(activeTab);
+    } else createNewTab();
+}
+
+
+function clearAllData() {
+    if(confirm("Clear all tabs, code, and settings?")) {
+        localStorage.removeItem('codeRunnerTabs');
+        localStorage.removeItem('codeRunnerActiveTab');
+        localStorage.removeItem('codeRunnerTheme');
+        document.querySelectorAll('.tab').forEach(t => { if(!t.id || t.id !== 'addTab') t.remove(); });
+        document.querySelectorAll('.panel').forEach(p => p.remove());
+        tabCount = 0;
+        createNewTab();
+    }
+}
+
+function runCode(panel){
+    let code = panel.querySelector('textarea').value;
+    const lang = panel.querySelector('.language').value;
+    const output = panel.querySelector('.output');
+
+    output.innerHTML = "⏳ Running...";
+
+  
+    if (lang === "javascript") {
+        code = code.replace(/\bprint\s*\(/g, "console.log(");
+    }
+
+    if(lang === 'javascript') {
+        runJS(code).then(r => output.innerHTML = r);
+
+    } else if(lang === 'python') {
+        runPy(code).then(r => output.innerHTML = r);
+
+    } else if(lang === 'lua') {
+        output.innerHTML = runLua(code);
+
+    } else {
+       
+        Promise.allSettled([
+            runJS(code.replace(/\bprint\s*\(/g, "console.log(")), 
+            runPy(code),
+            runLua(code)
+        ]).then(results => {
+
+            const js = results[0].status === "fulfilled" ? results[0].value : "Error";
+            const py = results[1].status === "fulfilled" ? results[1].value : "Error";
+            const lua = results[2].status === "fulfilled" ? results[2].value : "Error";
+
+            output.innerText = 
+`JS:
+${js}
+
+Python:
+${py}
+
+Lua:
+${lua}`;
+        });
+    }
+}
+
+
+function saveCode(panel) {
+    const code = panel.querySelector('textarea').value;
+    let ext = prompt("Enter file extension (without dot)","txt");
+    if(ext===null) return;
+    if(!ext) ext="txt";
+    const blob = new Blob([code], {type:"text/plain"});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `code.${ext}`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+}
+
+
+function updatePanelStatus(panel) {
+    const luaText = panel.querySelector('.lua-text');
+    const luaSpinner = panel.querySelector('.lua-spinner');
+    const pyText = panel.querySelector('.py-text');
+    const pySpinner = panel.querySelector('.py-spinner');
+    luaText.textContent = luaReady?"✅ Lua ready":"✅ Lua loading";
+    luaSpinner.style.display = luaReady?'none':'inline-block';
+    pyText.textContent = pyodideReady?"✅ Python ready":"⏳ Python loading";
+    pySpinner.style.display = pyodideReady?'none':'inline-block';
+}
+
+
+async function loadPy(){
+    self.pyodide = await loadPyodide();
+    pyodideReady=true;
+    document.querySelectorAll('.panel').forEach(updatePanelStatus);
+}
+
+function loadLua(){
+    try{
+        const {lua,lauxlib,lualib,to_jsstring,to_luastring} = fengari;
+        L=lauxlib.luaL_newstate();
+        lualib.luaL_openlibs(L);
+        fengObjs={lua,lauxlib,lualib,to_jsstring,to_luastring};
+        luaReady=true;
+        document.querySelectorAll('.panel').forEach(updatePanelStatus);
+    }catch(e){console.error(e);}
+}
+
+loadPy(); 
+loadLua();
+
+
+addTabBtn.addEventListener('click', ()=>{ tabOptions.style.display = tabOptions.style.display==='block'?'none':'block'; });
+tabsContainer.addEventListener('click', e=>{
+    if(e.target.classList.contains('closeBtn')){
+        const tab = e.target.parentElement;
+        const panel = document.querySelector(`.panel[data-id='${tab.dataset.id}']`);
+        if(confirm(`Delete "${tab.textContent.replace('×','').trim()}"?`)){
+            panel?.remove();
+            tab?.remove();
+            saveState();
+            const remaining = document.querySelectorAll('.tab');
+            if(remaining.length>0) switchTab(remaining[0].dataset.id);
+        }
+        return;
+    }
+    if(e.target.classList.contains('tab')) switchTab(e.target.dataset.id);
+});
+tabsContainer.addEventListener('dblclick', e=>{
+    const tab = e.target.closest('.tab');
+    if(!tab || tab.id==='addTab') return;
+    const newName = prompt("Enter new tab name:", tab.textContent.replace('×','').trim());
+    if(newName && newName.trim()!=="") tab.childNodes[0].nodeValue = newName.trim() + " ";
+    saveState();
+});
+panelsContainer.addEventListener('click', e=>{
+    const panel = e.target.closest('.panel');
+    if(!panel) return;
+  const runBtn = e.target.closest('.run');
+if (runBtn) runCode(panel);
+
+    if(e.target.classList.contains('save')) saveCode(panel);
+});
+document.getElementById('newFile').addEventListener('click', ()=>{ createNewTab(); tabOptions.style.display='none'; });
+document.getElementById('openFile').addEventListener('click', ()=>{ document.getElementById('fileInput').click(); tabOptions.style.display='none'; });
+document.getElementById('fileInput').addEventListener('change', e=>{
+    const file = e.target.files[0];
+    if(file){
+        const reader = new FileReader();
+        reader.onload = ()=> createNewTab(reader.result, file.name);
+        reader.readAsText(file);
+    }
+});
+document.getElementById('openFolder').addEventListener('click', ()=>{ document.getElementById('folderInput').click(); tabOptions.style.display='none'; });
+document.getElementById('folderInput').addEventListener('change', e=>{
+    Array.from(e.target.files).forEach(file=>{
+        const reader = new FileReader();
+        reader.onload = ()=> createNewTab(reader.result, file.webkitRelativePath || file.name);
+        reader.readAsText(file);
+    });
+});
+
+
+loadState();
+
+
+const wrapper = document.getElementById('wrapper');
+wrapper.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+wrapper.addEventListener('drop', e => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if(files.length){
+        Array.from(files).forEach(file => {
+            const reader = new FileReader();
+            reader.onload = () => createNewTab(reader.result, file.name);
+            reader.readAsText(file);
+        });
+    }
+});
+</script>
+</body>
+</html>
+
